@@ -22,6 +22,9 @@
       --hole-radius: 2px;
       --hole-color: #cbbf9a;
 
+      /* 穴列の上下パディング（JSが自動調整） */
+      --sprocket-pad: 12px;
+
       /* ====== 写真コマ ====== */
       --window-pad-y: 10px;
       --window-pad-x: 8px;
@@ -32,7 +35,7 @@
       --ui-pad: 10px;
       --ui-gap: 10px;
 
-      /* スクロール速度 */
+      /* スクロール速度（初期値。実際はスライダーで変更） */
       --speed: 90;
     }
 
@@ -48,7 +51,7 @@
       padding:18px;
     }
 
-    /* ★ステージ（9:16）を“親コンテナ”として、UIを中に重ねる */
+    /* ステージ（9:16）を親コンテナとして、UIを中に重ねる */
     .stageWrap{
       width:min(var(--stage-w), 92vw);
       position:relative;
@@ -58,8 +61,11 @@
       width:100%;
       aspect-ratio: 9 / 16;
       background:var(--stage-bg);
-      border-radius:0px;
+
+      /* ★外周は直角 */
+      border-radius:0;
       overflow:hidden;
+
       position:relative;
       box-shadow: 0 10px 40px rgba(0,0,0,.45);
       border:1px solid #222;
@@ -124,7 +130,6 @@
       place-items:center;
       background:rgba(0,0,0,.55);
       border:2px dashed rgba(255,255,255,.25);
-      border-radius:18px;
       z-index:50;
       text-align:center;
       padding:18px;
@@ -141,10 +146,6 @@
         linear-gradient(90deg, rgba(0,0,0,.35), transparent 25%, transparent 75%, rgba(0,0,0,.35));
     }
 
-    :root{
-  --sprocket-pad: 12px; /* JSが自動で調整して上下一致させる */
-}
-
     .sprocket{
       position:absolute;
       top:0; bottom:0;
@@ -155,8 +156,11 @@
       display:flex;
       flex-direction:column;
       align-items:center;
-      padding-top:var(--sprocket-pad);
-     padding-bottom: var(--sprocket-pad);
+
+      /* ★上下パディングはJSが調整（下まで埋める） */
+      padding-top: var(--sprocket-pad);
+      padding-bottom: var(--sprocket-pad);
+
       gap:var(--hole-gap);
       z-index:5;
     }
@@ -174,7 +178,7 @@
       opacity:.95;
     }
 
-    /* 画像が流れる窓（=UIが重なっても下に押されない） */
+    /* 画像が流れる窓 */
     .window{
       position:absolute;
       top:0; bottom:0;
@@ -193,21 +197,25 @@
       transform: translateY(0px);
     }
 
+    /* ★白縁なし・角丸なし（直角） */
     .frame{
       background:#0f0f0f;
       height: var(--frame-h);
       overflow:hidden;
-      border:0;        /* 白縁なし */
-      border-radius:0; /* 角丸なし */
+      border:0;
+      border-radius:0;
       position:relative;
       box-shadow: 0 2px 0 rgba(255,255,255,.04), 0 14px 26px rgba(0,0,0,.35);
+      cursor: default;
     }
+
     .frame img{
       width:100%;
       height:100%;
       object-fit:cover;
       display:block;
       filter: saturate(1.02) contrast(1.03);
+      transform-origin:center center;
     }
 
     .grain{
@@ -246,24 +254,85 @@
     }
     .paused .pausedBadge{ display:block; }
 
-    /* UIが見えてても写真が“見づらい”場合はここを少し上げる（任意） */
-    .toolbarShadow{
+    /* ====== Crop Editor (paused中に写真を調整) ====== */
+    .editorOverlay{
       position:absolute;
-      left:0; right:0; top:0;
-      height:110px;
-      background: linear-gradient(180deg, rgba(0,0,0,.35), transparent);
-      z-index:70;
-      pointer-events:none;
-      opacity:.0; /* ←必要なら 0.25 くらいに */
-      transition: opacity .25s ease;
+      inset:0;
+      z-index:120;
+      display:none;
+      background:rgba(0,0,0,.65);
+      backdrop-filter: blur(6px);
     }
-    .toolbar:not(.hidden) + .toolbarShadow{ opacity:.0; }
+    .editorOverlay.show{ display:block; }
+
+    .editorPanel{
+      position:absolute;
+      left:12px; right:12px; top:12px;
+      background:rgba(20,20,20,.72);
+      border:1px solid rgba(255,255,255,.18);
+      border-radius:14px;
+      padding:10px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+      flex-wrap:wrap;
+    }
+    .editorPanel .left{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .editorPanel .btn{
+      background:#2a2a2a;
+      color:#eee;
+      border:1px solid rgba(255,255,255,.15);
+      border-radius:10px;
+      padding:8px 12px;
+      cursor:pointer;
+    }
+    .editorPanel .btn:hover{ background:#333; }
+    .editorPanel .hint{ font-size:12px; opacity:.85; }
+
+    .editorStage{
+      position:absolute;
+      left:0; right:0;
+      top:78px; bottom:0;
+      display:grid;
+      place-items:center;
+      padding:18px;
+    }
+
+    /* 編集プレビュー枠：横長（コマの雰囲気） */
+    .editorFrame{
+      width:min(92vw, 520px);
+      aspect-ratio: 16 / 9;
+      background:#0f0f0f;
+      overflow:hidden;
+      border-radius:0;
+      border:1px solid rgba(255,255,255,.18);
+      box-shadow: 0 18px 40px rgba(0,0,0,.55);
+      position:relative;
+    }
+
+    .editorFrame img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      transform-origin:center center;
+      user-select:none;
+      -webkit-user-drag:none;
+      touch-action:none; /* ドラッグ編集用 */
+    }
+
+    .slider{ width:160px; }
   </style>
 </head>
 
 <body>
   <div class="stageWrap">
-    <!-- ★UIはステージの上に重ねる -->
+    <!-- UIはステージの上に重ねる -->
     <div class="toolbar" id="toolbar">
       <div class="left">
         <input id="picker" type="file" accept="image/*" multiple />
@@ -274,7 +343,6 @@
       </div>
       <div class="hint">5秒後に自動でUI非表示 / タップ or マウス移動で再表示</div>
     </div>
-    <div class="toolbarShadow"></div>
 
     <div class="stage" id="stage">
       <div class="dropOverlay" id="overlay">
@@ -296,6 +364,29 @@
 
         <div class="grain"></div>
         <div class="vignette"></div>
+      </div>
+
+      <!-- ===== Crop Editor Overlay ===== -->
+      <div class="editorOverlay" id="editor">
+        <div class="editorPanel">
+          <div class="left">
+            <span class="hint">PAUSED中：ドラッグで位置 / ピンチ or スライダーで拡大</span>
+            <label class="hint">ズーム
+              <input class="slider" id="zoom" type="range" min="1" max="2.5" step="0.01" value="1">
+            </label>
+          </div>
+          <div class="right" style="display:flex; gap:8px; align-items:center;">
+            <button class="btn" id="resetCrop">リセット</button>
+            <button class="btn" id="saveCrop">保存</button>
+            <button class="btn" id="closeCrop">閉じる</button>
+          </div>
+        </div>
+
+        <div class="editorStage">
+          <div class="editorFrame">
+            <img id="editorImg" alt="">
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -326,11 +417,10 @@
       toolbar.classList.remove('hidden');
       resetHideUITimer();
     }
-
     // 初回：起動して5秒でUIを消す（=“再生開始”）
     resetHideUITimer();
 
-    // ===== プレースホルダ =====
+    // ===== プレースホルダ（未選択時）=====
     const placeholderSvgs = Array.from({length: 8}).map((_,i)=>{
       const bg = (i%2===0) ? '#2c3e50' : '#34495e';
       const text = `PHOTO ${i+1}`;
@@ -341,56 +431,67 @@
             text-anchor="middle" dominant-baseline="middle">${text}</text>
         </svg>
       `);
-      return `data:image/svg+xml;charset=utf-8,${svg}`;
+      return \`data:image/svg+xml;charset=utf-8,\${svg}\`;
     });
 
     let urls = [...placeholderSvgs];
     let paused = false;
 
-    // 穴の数を画面高さに合わせて生成
-function buildHoles(){
-  const holesL = document.getElementById('holesL');
-  const holesR = document.getElementById('holesR');
-  holesL.innerHTML = '';
-  holesR.innerHTML = '';
+    // ===== 穴の数：最下部まで埋める（上下余白も均等）=====
+    function buildHoles(){
+      const holesL = document.getElementById('holesL');
+      const holesR = document.getElementById('holesR');
+      holesL.innerHTML = '';
+      holesR.innerHTML = '';
 
-  const stageRect = stage.getBoundingClientRect();
-  const styles = getComputedStyle(document.documentElement);
+      const stageRect = stage.getBoundingClientRect();
+      const styles = getComputedStyle(document.documentElement);
 
-  const holeH = parseFloat(styles.getPropertyValue('--hole-h'));
-  const gap   = parseFloat(styles.getPropertyValue('--hole-gap'));
+      const holeH = parseFloat(styles.getPropertyValue('--hole-h'));
+      const gap   = parseFloat(styles.getPropertyValue('--hole-gap'));
 
-  // まず穴エリア（上下パディング仮）を想定
-  // countを切り上げにして“必ず最後まで届く”ようにする
-  const approxPad = 12; // 初期値（あとで上書き）
-  const usableH = stageRect.height - approxPad * 2;
-  const unit = holeH + gap;
+      const approxPad = 12; // 初期推定（あとで上書き）
+      const usableH = stageRect.height - approxPad * 2;
+      const unit = holeH + gap;
 
-  let count = Math.ceil(usableH / unit);
-  if (count < 1) count = 1;
+      let count = Math.ceil(usableH / unit);
+      if (count < 1) count = 1;
 
-  // 実際にcount個並べた時の必要高さ
-  const needed = (count * holeH) + ((count - 1) * gap);
+      const needed = (count * holeH) + ((count - 1) * gap);
+      let pad = (stageRect.height - needed) / 2;
+      pad = Math.max(6, pad);
 
-  // 上下に均等に余白を割り当て（上下そろう＆下まで埋まる）
-  let pad = (stageRect.height - needed) / 2;
-  // 極端に小さくならないように最低値
-  pad = Math.max(6, pad);
+      document.documentElement.style.setProperty('--sprocket-pad', `${pad}px`);
 
-  // CSS変数に反映
-  document.documentElement.style.setProperty('--sprocket-pad', `${pad}px`);
+      for(let i=0;i<count;i++){
+        const a = document.createElement('div');
+        a.className = 'hole';
+        const b = document.createElement('div');
+        b.className = 'hole';
+        holesL.appendChild(a);
+        holesR.appendChild(b);
+      }
+    }
 
-  // 穴生成
-  for(let i=0;i<count;i++){
-    const a = document.createElement('div');
-    a.className = 'hole';
-    const b = document.createElement('div');
-    b.className = 'hole';
-    holesL.appendChild(a);
-    holesR.appendChild(b);
-  }
-}
-    // コマを作る（無限ループのため2回並べる）
+    // ===== Crop data: 画像ごとの表示調整を保持 =====
+    // key: 画像URL（ObjectURL含む） / value: {scale, x, y}
+    const cropMap = new Map();
+
+    function applyCropsToVisibleFrames(){
+      const imgs = strip.querySelectorAll('.frame img');
+      imgs.forEach(img=>{
+        const key = img.src;
+        const saved = cropMap.get(key);
+        if(saved){
+          img.style.transformOrigin = 'center center';
+          img.style.transform = `translate(${saved.x}px, ${saved.y}px) scale(${saved.scale})`;
+        }else{
+          img.style.transform = '';
+        }
+      });
+    }
+
+    // コマ生成（無限ループのため2回並べる）
     function renderFrames(){
       strip.innerHTML = '';
       const doubled = [...urls, ...urls];
@@ -398,15 +499,31 @@ function buildHoles(){
       doubled.forEach((src)=>{
         const frame = document.createElement('div');
         frame.className = 'frame';
+
         const img = document.createElement('img');
         img.src = src;
         img.loading = 'eager';
+
+        // 保存済みcropがあれば反映
+        const saved = cropMap.get(src);
+        if(saved){
+          img.style.transformOrigin = 'center center';
+          img.style.transform = `translate(${saved.x}px, ${saved.y}px) scale(${saved.scale})`;
+        }
+
         frame.appendChild(img);
         strip.appendChild(frame);
+
+        // ★PAUSED中だけクリックで編集を開く
+        frame.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          if(!paused) return;
+          openEditorFor(src);
+        });
       });
     }
 
-    // アニメーション
+    // ===== アニメーション =====
     let y = 0;
     let lastT = performance.now();
 
@@ -424,10 +541,11 @@ function buildHoles(){
         }
         strip.style.transform = `translateY(${y}px)`;
       }
+
       requestAnimationFrame(tick);
     }
 
-    // 画像追加
+    // ===== 画像追加 =====
     function addFiles(fileList){
       const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
       if(files.length === 0) return;
@@ -445,15 +563,17 @@ function buildHoles(){
 
     picker.addEventListener('change', (e)=> addFiles(e.target.files));
 
+    // ===== Pause/Resume =====
     function togglePause(){
+      // エディタが開いてる時はまず閉じる
+      if(editor.classList.contains('show')) closeEditor();
+
       paused = !paused;
       stage.classList.toggle('paused', paused);
       toggleBtn.textContent = paused ? '再開' : '一時停止';
       showUI();
     }
     toggleBtn.addEventListener('click', (e)=>{ e.stopPropagation(); togglePause(); });
-
-    // 触ったらUI表示
     speedSlider.addEventListener('input', ()=> showUI());
 
     // ステージタップ：UI表示（再生は止めない）
@@ -461,7 +581,6 @@ function buildHoles(){
 
     // PC：マウス動かしたらUI表示
     window.addEventListener('mousemove', ()=> showUI(), {passive:true});
-
     // スマホ：タッチしたらUI表示
     window.addEventListener('touchstart', ()=> showUI(), {passive:true});
 
@@ -475,6 +594,120 @@ function buildHoles(){
       if(e.dataTransfer?.files) addFiles(e.dataTransfer.files);
     });
 
+    // ===== Crop Editor =====
+    const editor = document.getElementById('editor');
+    const editorImg = document.getElementById('editorImg');
+    const zoom = document.getElementById('zoom');
+    const btnReset = document.getElementById('resetCrop');
+    const btnSave = document.getElementById('saveCrop');
+    const btnClose = document.getElementById('closeCrop');
+
+    let editingKey = null;
+    let current = { scale: 1, x: 0, y: 0 };
+
+    function applyTransformToImg(imgEl, t){
+      imgEl.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.scale})`;
+    }
+
+    function openEditorFor(srcKey){
+      if(!paused) return;
+      editingKey = srcKey;
+
+      const saved = cropMap.get(srcKey);
+      current = saved ? {...saved} : { scale: 1, x: 0, y: 0 };
+
+      editorImg.src = srcKey;
+      zoom.value = String(current.scale);
+      applyTransformToImg(editorImg, current);
+
+      editor.classList.add('show');
+      showUI();
+    }
+
+    function closeEditor(){
+      editor.classList.remove('show');
+      editingKey = null;
+    }
+
+    zoom.addEventListener('input', ()=>{
+      current.scale = Number(zoom.value);
+      applyTransformToImg(editorImg, current);
+    });
+
+    btnReset.addEventListener('click', ()=>{
+      current = { scale: 1, x: 0, y: 0 };
+      zoom.value = "1";
+      applyTransformToImg(editorImg, current);
+    });
+
+    btnSave.addEventListener('click', ()=>{
+      if(!editingKey) return;
+      cropMap.set(editingKey, {...current});
+      applyCropsToVisibleFrames();
+      closeEditor();
+    });
+
+    btnClose.addEventListener('click', closeEditor);
+
+    // Overlay背景タップで閉じる（パネル内クリックは無視）
+    editor.addEventListener('click', (e)=>{
+      if(e.target === editor) closeEditor();
+    });
+
+    // Drag to pan (editor)
+    let dragging = false;
+    let last = {x:0, y:0};
+
+    editorImg.addEventListener('pointerdown', (e)=>{
+      dragging = true;
+      editorImg.setPointerCapture(e.pointerId);
+      last = {x:e.clientX, y:e.clientY};
+    });
+
+    editorImg.addEventListener('pointermove', (e)=>{
+      if(!dragging) return;
+      const dx = e.clientX - last.x;
+      const dy = e.clientY - last.y;
+      last = {x:e.clientX, y:e.clientY};
+      current.x += dx;
+      current.y += dy;
+      applyTransformToImg(editorImg, current);
+    });
+
+    editorImg.addEventListener('pointerup', ()=>{ dragging = false; });
+    editorImg.addEventListener('pointercancel', ()=>{ dragging = false; });
+
+    // Pinch zoom (mobile)
+    let pinch = {active:false, dist:0, startScale:1};
+    function dist2(a,b){
+      const dx = a.clientX - b.clientX;
+      const dy = a.clientY - b.clientY;
+      return Math.hypot(dx,dy);
+    }
+
+    editorImg.addEventListener('touchstart', (e)=>{
+      if(e.touches.length === 2){
+        pinch.active = true;
+        pinch.dist = dist2(e.touches[0], e.touches[1]);
+        pinch.startScale = current.scale;
+      }
+    }, {passive:false});
+
+    editorImg.addEventListener('touchmove', (e)=>{
+      if(!pinch.active || e.touches.length !== 2) return;
+      e.preventDefault();
+      const d = dist2(e.touches[0], e.touches[1]);
+      const ratio = d / pinch.dist;
+      current.scale = Math.min(2.5, Math.max(1, pinch.startScale * ratio));
+      zoom.value = String(current.scale);
+      applyTransformToImg(editorImg, current);
+    }, {passive:false});
+
+    editorImg.addEventListener('touchend', (e)=>{
+      if(e.touches.length < 2) pinch.active = false;
+    });
+
+    // ===== 初期化 =====
     window.addEventListener('resize', buildHoles);
     buildHoles();
     renderFrames();
