@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Vintage Film Strip Scroller</title>
+
+  <style>
+    :root{
+      /* ====== 画面（9:16） ====== */
+      --stage-w: 390px;         /* 好きに変更OK */
+      --stage-bg: #0a0a0a;
+
+      /* ====== フィルム（ヴィンテージ） ====== */
+      --film-base: #1f1f1e;
+      --film-shade: #2a2a28;
+
+      --sprocket-w: 38px;
+      --hole-w: 18px;
+      --hole-h: 12px;
+      --hole-gap: 12px;
+      --hole-radius: 2px;
+      --hole-color: #cbbf9a;
+
+      /* ====== 写真コマ ====== */
+      --window-pad-y: 10px;
+      --window-pad-x: 8px;
+      --frame-gap: 14px;
+      --frame-h: 176px;
+
+      /* UI（ステージ上に重ねる） */
+      --ui-pad: 10px;
+      --ui-gap: 10px;
+
+      /* スクロール速度 */
+      --speed: 90;
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      background:#111;
+      color:#eee;
+      display:grid;
+      place-items:center;
+      min-height:100vh;
+      padding:18px;
+    }
+
+    /* ★ステージ（9:16）を“親コンテナ”として、UIを中に重ねる */
+    .stageWrap{
+      width:min(var(--stage-w), 92vw);
+      position:relative;
+    }
+
+    .stage{
+      width:100%;
+      aspect-ratio: 9 / 16;
+      background:var(--stage-bg);
+      border-radius:0px;
+      overflow:hidden;
+      position:relative;
+      box-shadow: 0 10px 40px rgba(0,0,0,.45);
+      border:1px solid #222;
+      touch-action: manipulation;
+    }
+
+    /* ====== UI（ステージの上に重ねる） ====== */
+    .toolbar{
+      position:absolute;
+      left:var(--ui-pad);
+      right:var(--ui-pad);
+      top:var(--ui-pad);
+      z-index:80;
+
+      display:flex;
+      gap:var(--ui-gap);
+      align-items:center;
+      justify-content:space-between;
+      flex-wrap:wrap;
+
+      background:rgba(10,10,10,.38);
+      border:1px solid rgba(255,255,255,.14);
+      backdrop-filter: blur(10px);
+      padding:10px 12px;
+      border-radius:14px;
+
+      opacity:1;
+      transform: translateY(0);
+      transition: opacity .25s ease, transform .25s ease;
+      user-select:none;
+      pointer-events:auto;
+    }
+    .toolbar.hidden{
+      opacity:0;
+      transform: translateY(-10px);
+      pointer-events:none;
+    }
+
+    .toolbar .left{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    input[type="file"]{ color:#eee; max-width: 210px; }
+    .btn{
+      background:#2a2a2a;
+      color:#eee;
+      border:1px solid rgba(255,255,255,.15);
+      border-radius:10px;
+      padding:8px 12px;
+      cursor:pointer;
+    }
+    .btn:hover{ background:#333; }
+    .hint{ font-size:12px; opacity:.85; }
+
+    /* ドロップ案内 */
+    .dropOverlay{
+      position:absolute;
+      inset:0;
+      display:none;
+      place-items:center;
+      background:rgba(0,0,0,.55);
+      border:2px dashed rgba(255,255,255,.25);
+      border-radius:18px;
+      z-index:50;
+      text-align:center;
+      padding:18px;
+    }
+    .dropOverlay.show{ display:grid; }
+
+    /* フィルム質感 */
+    .film{
+      position:absolute;
+      inset:0;
+      background:
+        radial-gradient(1200px 600px at 30% 20%, rgba(255,255,255,.05), transparent 60%),
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0) 35%),
+        linear-gradient(90deg, rgba(0,0,0,.35), transparent 25%, transparent 75%, rgba(0,0,0,.35));
+    }
+
+    :root{
+  --sprocket-pad: 12px; /* JSが自動で調整して上下一致させる */
+}
+
+    .sprocket{
+      position:absolute;
+      top:0; bottom:0;
+      width:var(--sprocket-w);
+      background:
+        linear-gradient(180deg, var(--film-shade), var(--film-base)),
+        repeating-linear-gradient(180deg, rgba(255,255,255,.03) 0 2px, rgba(0,0,0,0) 2px 6px);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      padding-top:var(--sprocket-pad);
+     padding-bottom: var(--sprocket-pad);
+      gap:var(--hole-gap);
+      z-index:5;
+    }
+    .sprocket.left{ left:0; }
+    .sprocket.right{ right:0; }
+
+    .hole{
+      width:var(--hole-w);
+      height:var(--hole-h);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.18), rgba(0,0,0,.08)),
+        var(--hole-color);
+      border-radius:var(--hole-radius);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.12);
+      opacity:.95;
+    }
+
+    /* 画像が流れる窓（=UIが重なっても下に押されない） */
+    .window{
+      position:absolute;
+      top:0; bottom:0;
+      left:var(--sprocket-w);
+      right:var(--sprocket-w);
+      overflow:hidden;
+      padding:var(--window-pad-y) var(--window-pad-x);
+      z-index:10;
+    }
+
+    .strip{
+      will-change: transform;
+      display:flex;
+      flex-direction:column;
+      gap:var(--frame-gap);
+      transform: translateY(0px);
+    }
+
+    .frame{
+      background:#0f0f0f;
+      height: var(--frame-h);
+      overflow:hidden;
+      border:0;        /* 白縁なし */
+      border-radius:0; /* 角丸なし */
+      position:relative;
+      box-shadow: 0 2px 0 rgba(255,255,255,.04), 0 14px 26px rgba(0,0,0,.35);
+    }
+    .frame img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+      filter: saturate(1.02) contrast(1.03);
+    }
+
+    .grain{
+      pointer-events:none;
+      position:absolute;
+      inset:0;
+      background-image:
+        radial-gradient(rgba(255,245,220,.07) 1px, transparent 1px),
+        radial-gradient(rgba(255,255,255,.04) 1px, transparent 1px);
+      background-size: 3px 3px, 4px 4px;
+      background-position: 0 0, 2px 1px;
+      mix-blend-mode: overlay;
+      opacity:.14;
+      z-index:20;
+    }
+    .vignette{
+      pointer-events:none;
+      position:absolute;
+      inset:0;
+      background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.35) 100%);
+      z-index:21;
+      opacity:.55;
+    }
+
+    .pausedBadge{
+      position:absolute;
+      right:10px;
+      top:10px;
+      background:rgba(0,0,0,.55);
+      border:1px solid rgba(255,255,255,.20);
+      padding:6px 10px;
+      border-radius:999px;
+      font-size:12px;
+      z-index:85;
+      display:none;
+    }
+    .paused .pausedBadge{ display:block; }
+
+    /* UIが見えてても写真が“見づらい”場合はここを少し上げる（任意） */
+    .toolbarShadow{
+      position:absolute;
+      left:0; right:0; top:0;
+      height:110px;
+      background: linear-gradient(180deg, rgba(0,0,0,.35), transparent);
+      z-index:70;
+      pointer-events:none;
+      opacity:.0; /* ←必要なら 0.25 くらいに */
+      transition: opacity .25s ease;
+    }
+    .toolbar:not(.hidden) + .toolbarShadow{ opacity:.0; }
+  </style>
+</head>
+
+<body>
+  <div class="stageWrap">
+    <!-- ★UIはステージの上に重ねる -->
+    <div class="toolbar" id="toolbar">
+      <div class="left">
+        <input id="picker" type="file" accept="image/*" multiple />
+        <button class="btn" id="toggle">一時停止</button>
+        <label class="hint">速度:
+          <input id="speed" type="range" min="20" max="220" value="90" />
+        </label>
+      </div>
+      <div class="hint">5秒後に自動でUI非表示 / タップ or マウス移動で再表示</div>
+    </div>
+    <div class="toolbarShadow"></div>
+
+    <div class="stage" id="stage">
+      <div class="dropOverlay" id="overlay">
+        <div>
+          <div style="font-size:16px; font-weight:700; margin-bottom:6px;">ここに写真をドロップ</div>
+          <div class="hint">横写真が多くてもOK。フィルム風に自動で流します。</div>
+        </div>
+      </div>
+
+      <div class="pausedBadge">PAUSED</div>
+
+      <div class="film">
+        <div class="sprocket left" id="holesL"></div>
+        <div class="sprocket right" id="holesR"></div>
+
+        <div class="window">
+          <div class="strip" id="strip"></div>
+        </div>
+
+        <div class="grain"></div>
+        <div class="vignette"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const stage = document.getElementById('stage');
+    const picker = document.getElementById('picker');
+    const strip = document.getElementById('strip');
+    const toggleBtn = document.getElementById('toggle');
+    const speedSlider = document.getElementById('speed');
+    const overlay = document.getElementById('overlay');
+    const toolbar = document.getElementById('toolbar');
+
+    // ===== UI 自動非表示（5秒）=====
+    const UI_HIDE_DELAY_MS = 5000;
+    let uiTimer = null;
+
+    function hideUI(){
+      toolbar.classList.add('hidden');
+      clearTimeout(uiTimer);
+      uiTimer = null;
+    }
+    function resetHideUITimer(){
+      clearTimeout(uiTimer);
+      uiTimer = setTimeout(hideUI, UI_HIDE_DELAY_MS);
+    }
+    function showUI(){
+      toolbar.classList.remove('hidden');
+      resetHideUITimer();
+    }
+
+    // 初回：起動して5秒でUIを消す（=“再生開始”）
+    resetHideUITimer();
+
+    // ===== プレースホルダ =====
+    const placeholderSvgs = Array.from({length: 8}).map((_,i)=>{
+      const bg = (i%2===0) ? '#2c3e50' : '#34495e';
+      const text = `PHOTO ${i+1}`;
+      const svg = encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700">
+          <rect width="100%" height="100%" fill="${bg}"/>
+          <text x="50%" y="50%" fill="#ecf0f1" font-size="90" font-family="system-ui"
+            text-anchor="middle" dominant-baseline="middle">${text}</text>
+        </svg>
+      `);
+      return `data:image/svg+xml;charset=utf-8,${svg}`;
+    });
+
+    let urls = [...placeholderSvgs];
+    let paused = false;
+
+    // 穴の数を画面高さに合わせて生成
+function buildHoles(){
+  const holesL = document.getElementById('holesL');
+  const holesR = document.getElementById('holesR');
+  holesL.innerHTML = '';
+  holesR.innerHTML = '';
+
+  const stageRect = stage.getBoundingClientRect();
+  const styles = getComputedStyle(document.documentElement);
+
+  const holeH = parseFloat(styles.getPropertyValue('--hole-h'));
+  const gap   = parseFloat(styles.getPropertyValue('--hole-gap'));
+
+  // まず穴エリア（上下パディング仮）を想定
+  // countを切り上げにして“必ず最後まで届く”ようにする
+  const approxPad = 12; // 初期値（あとで上書き）
+  const usableH = stageRect.height - approxPad * 2;
+  const unit = holeH + gap;
+
+  let count = Math.ceil(usableH / unit);
+  if (count < 1) count = 1;
+
+  // 実際にcount個並べた時の必要高さ
+  const needed = (count * holeH) + ((count - 1) * gap);
+
+  // 上下に均等に余白を割り当て（上下そろう＆下まで埋まる）
+  let pad = (stageRect.height - needed) / 2;
+  // 極端に小さくならないように最低値
+  pad = Math.max(6, pad);
+
+  // CSS変数に反映
+  document.documentElement.style.setProperty('--sprocket-pad', `${pad}px`);
+
+  // 穴生成
+  for(let i=0;i<count;i++){
+    const a = document.createElement('div');
+    a.className = 'hole';
+    const b = document.createElement('div');
+    b.className = 'hole';
+    holesL.appendChild(a);
+    holesR.appendChild(b);
+  }
+}
+    // コマを作る（無限ループのため2回並べる）
+    function renderFrames(){
+      strip.innerHTML = '';
+      const doubled = [...urls, ...urls];
+
+      doubled.forEach((src)=>{
+        const frame = document.createElement('div');
+        frame.className = 'frame';
+        const img = document.createElement('img');
+        img.src = src;
+        img.loading = 'eager';
+        frame.appendChild(img);
+        strip.appendChild(frame);
+      });
+    }
+
+    // アニメーション
+    let y = 0;
+    let lastT = performance.now();
+
+    function tick(t){
+      const dt = (t - lastT) / 1000;
+      lastT = t;
+
+      if(!paused){
+        const speed = Number(speedSlider.value);
+        y -= speed * dt;
+
+        const halfHeight = strip.scrollHeight / 2;
+        if(Math.abs(y) >= halfHeight){
+          y += halfHeight;
+        }
+        strip.style.transform = `translateY(${y}px)`;
+      }
+      requestAnimationFrame(tick);
+    }
+
+    // 画像追加
+    function addFiles(fileList){
+      const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+      if(files.length === 0) return;
+
+      const isPlaceholderOnly = urls.every(u => u.startsWith('data:image/svg+xml'));
+      if(isPlaceholderOnly) urls = [];
+
+      const newUrls = files.map(f => URL.createObjectURL(f));
+      urls.push(...newUrls);
+
+      renderFrames();
+      y = 0;
+      showUI();
+    }
+
+    picker.addEventListener('change', (e)=> addFiles(e.target.files));
+
+    function togglePause(){
+      paused = !paused;
+      stage.classList.toggle('paused', paused);
+      toggleBtn.textContent = paused ? '再開' : '一時停止';
+      showUI();
+    }
+    toggleBtn.addEventListener('click', (e)=>{ e.stopPropagation(); togglePause(); });
+
+    // 触ったらUI表示
+    speedSlider.addEventListener('input', ()=> showUI());
+
+    // ステージタップ：UI表示（再生は止めない）
+    stage.addEventListener('click', ()=> showUI());
+
+    // PC：マウス動かしたらUI表示
+    window.addEventListener('mousemove', ()=> showUI(), {passive:true});
+
+    // スマホ：タッチしたらUI表示
+    window.addEventListener('touchstart', ()=> showUI(), {passive:true});
+
+    // DnD
+    stage.addEventListener('dragenter', (e)=>{ e.preventDefault(); overlay.classList.add('show'); showUI(); });
+    stage.addEventListener('dragover', (e)=>{ e.preventDefault(); });
+    stage.addEventListener('dragleave', (e)=>{ e.preventDefault(); overlay.classList.remove('show'); });
+    stage.addEventListener('drop', (e)=>{
+      e.preventDefault();
+      overlay.classList.remove('show');
+      if(e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+    });
+
+    window.addEventListener('resize', buildHoles);
+    buildHoles();
+    renderFrames();
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>
